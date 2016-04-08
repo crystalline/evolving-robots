@@ -1,3 +1,6 @@
+
+var util = require('./util.js');
+
 function L2square(x1,y1,x2,y2) {
     var dx = x1-x2;
     var dy = y1-y2;
@@ -416,8 +419,8 @@ function makeRobotWorldModel(random) {
     return model;
 }
 
-function testRobotSimPerf() {
-    var random = Math.random;
+function testRobotSimPerf(random) {
+    var random = random || Math.random;
     
     var N = 100000;
     var genome = [];
@@ -445,4 +448,42 @@ function testRobotSimPerf() {
     
     console.log('Done. Time: '+((t2-t1)/1000)+'s, Time per step: '+((t2-t1)/(N*1000)));    
 }
+
+if (process.argv[2] == 'test') {
+    testRobotSimPerf();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
