@@ -3,6 +3,10 @@ var fs = require('fs');
 var pr = console.log;
 var util = require('./util.js');
 
+var numCpus = require('os').cpus().length;
+
+//Cluster bookkeeping
+
 globNworkers = 4;
 workers = [];
 taskCallback = false;
@@ -190,7 +194,7 @@ function testCluster(onDone) {
     var out = [];
     for (var i=0; i<999; i++) { data[i] = Math.random() }
     var out1, out2;
-    initCluster(4);
+    initCluster(numCpus);
     pr('Start Cluster Tests');
     sExecTasks(data, 'sqrOne', function (res) {
         out1 = res;
@@ -405,6 +409,8 @@ function executeGA(experiment) {
     evolveGenerations(onEnd);
 }
 
+// Tests
+
 prepareGAtest = function() {
     var N = 10;
     var prng = new util.prng(812037);
@@ -462,8 +468,8 @@ module.exports = {
 }
 
 if (require.main === module && cluster.isMaster) {
-    
-    initCluster(6);
+
+    initCluster(numCpus);
     
     testCluster(function () {
         pExecFn('prepareGAtest', function () {
