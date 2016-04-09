@@ -1,3 +1,4 @@
+
 var cluster = require('cluster');
 var fs = require('fs');
 var pr = console.log;
@@ -30,7 +31,7 @@ function initCluster(nworkers) {
     
     if (workers.length) return;
     
-    nworkers = nworkers || 4;
+    nworkers = nworkers || numCpus;
     globNworkers = nworkers;
     
     pr('Master pid:' + process.pid + ' started.');
@@ -270,6 +271,9 @@ function executeGA(experiment) {
     var bestFitness = -Infinity;
     var i,j,gen;
     
+    var mutate = conf.mutate || mutate;
+    var recombine = conf.recombine || recombine;
+    
     for (i=0; i<conf.popSize; i++) {
         population[i] = {};
         
@@ -464,6 +468,7 @@ function test(parallel, onDone) {
 
 module.exports = {
     test: test,
+    initCluster: initCluster,
     executeGA: executeGA
 }
 

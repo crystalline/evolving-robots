@@ -1,42 +1,36 @@
 
-var N = 9
+var pr = console.log;
 
-function perceptron1L(inputs, weights, outputs) {
-    var i;
-    outputs[0] = 0;
-    outputs[1] = 0;
-    for (i=0; i<N; i++) {
-        outputs[0] += inputs[i]*weights[i];
-        outputs[1] += inputs[i]*weights[N+i];
-    }
-    outputs[0] = sigmoid(outputs[0]+weights[2*N+0]);
-    outputs[1] = sigmoid(outputs[1]+weights[2*N+1]);
-}
-
-
-//[input, state_t] -> *weights +bias -> [output, state_t+1]
-//[ 9 + 8 ] -> *(10 x 17 = 170) +10 -> [2 + 8]
-
-var Nstate = 8;
-var Nline = (Nstate+N+1)
-var Nweights = (2+Nstate)*Nline;
-var Ntemp = Nstate;
-
-Ncoeff = 100;
-
-function harmonicWeightInit(coeff) {
-    var i,j;
-    var weights = new Array(Nweights);
-    for (i=0; i<Nweights; i++) {
-        weights[i] = 0;
-        for (j=0; j<coeff.length; j += 2) {
-            weights[i] += coeff[j] * Math.cos( Math.PI*2*((j/2)+1+coeff[j+1])*i/Nweights );
+perceptron1L.prototype.compute = function(input, output, params) {
+    
+    output = output || new Float32Array(this.no);
+    var i,j, base, bias, out;
+    var weights = params || this.w;
+    
+    for (j=0; j<this.no; j++) {
+        base = j*this.ni+1;
+        bias = weights[base+this.ni];
+        out = bias;
+        for (i=0; i<this.ni; i++) {
+            out += input[i]*weights[base+i];
         }
+        output[j] = out;
     }
-    return weights;
 }
 
-function RNN1L(inputs, state, weights, outputs, temp) {
+perceptron1L.prototype.nparams = function () {
+    return this.no*(this.ni+1);
+}
+
+function perceptron1L(Ninputs, Noutputs, weights) {
+    this.ni = Ninputs;
+    this.no = Noutputs;
+    this.w = weights;
+}
+
+/*
+
+RNN.prototype.compute = function(input, output, params) {
     var i,j;
     var base;
     for(i=0; i<2; i++) {
@@ -70,6 +64,19 @@ function RNN1L(inputs, state, weights, outputs, temp) {
     for(i=0; i<Nstate; i++) {
         state[i] = temp[i];
     }
+}
+
+function RNN(Ninputs, Noutputs, weights) {
+    this.ni = Ninputs;
+    this.no = Noutputs;
+    this.w = weights;
+}
+
+
+*/
+
+module.exports = {
+    perceptron1L: perceptron1L
 }
 
 

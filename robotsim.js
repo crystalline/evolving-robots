@@ -336,24 +336,27 @@ RobotWorldModel.prototype.draw = function(graphics) {
       (this.y)+kry*r+this.Vright*ky, lineWidth*2, '#FF1100');
 };
 
-function RobotWorldModel(random) {
+RobotWorldModel.prototype.getIOspec = function() {
+    return {type: 'float32', in: this.nrays, out: 2};
+}
+
+function RobotWorldModel(conf) {
+    conf = conf || {};
     
-    var model = this;
-    
-    this.random = random || Math.random;
+    this.random = conf.random || Math.random;
     
     this.r = 0.1;
     
-    this.x = 5;
-    this.y = 5;
-    this.alpha = 0;
+    this.x = conf.x || 5;
+    this.y = conf.y || 5;
+    this.alpha = conf.alpha || 0;
     
     this.Vright = 0;
     this.Vleft = 0;
     
-    this.beta = Math.PI/2;
-    this.L = this.r*10;
-    this.nrays = 9;
+    this.beta = conf.beta || Math.PI/2;
+    this.L = conf.L || this.r*10;
+    this.nrays = conf.nrays || 9;
     this.rays = [];
     
     this.vision = new Array(this.nrays);
@@ -365,14 +368,14 @@ function RobotWorldModel(random) {
         this.vision[i] = 0;
     }
     
-    this.nballs = 200;
+    this.nballs = conf.nballs || 200;
     this.balls = [];
-    this.br = 0.1;
+    this.br = conf.br ||0.1;
     this.minBdist = this.r*2+this.br*2;
     this.minDistOvrdProb = 0.1;
     
-    this.w = 10;
-    this.h = 10;
+    this.w = conf.w || 10;
+    this.h = conf.h || 10;
     
     this.intersections = [];  
     this.index = new Index2d(this.L*1.1);
@@ -458,7 +461,8 @@ function testRobotSimPerf(random) {
 
 module.exports = {
     test: testRobotSimPerf,
-    RobotWorldModel: RobotWorldModel
+    RobotWorldModel: RobotWorldModel,
+    Index2d: Index2d
 }
 
 if (require.main === module) {
