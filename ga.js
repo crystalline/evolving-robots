@@ -215,7 +215,7 @@ function randNormal(mean, sigma, random) {
     return sigma*(random()+random()+random()-1.5)+mean;
 }
 
-function recombine(genomeA, genomeB, output, random) {
+function defRecombine(genomeA, genomeB, output, random) {
     //random = random || Math.random;
     for (i=0; i<genomeA.length; i++) {
         if (random() > 0.5) {
@@ -225,7 +225,7 @@ function recombine(genomeA, genomeB, output, random) {
     }
 }
 
-function mutate(genome, rate, mean, sigma, random) {
+function defMutate(genome, rate, mean, sigma, random) {
     //random = random || Math.random;
     for (i=0; i<genome.length; i++) {
         if (random() < rate) {
@@ -259,6 +259,7 @@ function executeGA(experiment) {
     if (!conf.genomeConstructor) {
         conf.genomeConstructor = Array;
     }
+    //pr(conf.genomeConstructor);
     
     var rootPrng = new conf.prngConstructor(conf.seed);
     
@@ -271,8 +272,8 @@ function executeGA(experiment) {
     var bestFitness = -Infinity;
     var i,j,gen;
     
-    var mutate = conf.mutate || mutate;
-    var recombine = conf.recombine || recombine;
+    var mutate = conf.mutate || defMutate;
+    var recombine = conf.recombine || defRecombine;
     
     for (i=0; i<conf.popSize; i++) {
         population[i] = {};

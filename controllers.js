@@ -28,6 +28,22 @@ function perceptron1L(Ninputs, Noutputs, weights) {
     this.w = weights;
 }
 
+function perceptron1L(Ninputs, Noutputs, weights) {
+    this.ni = Ninputs;
+    this.no = Noutputs;
+    this.w = weights;
+}
+
+var layers = {
+    'dense':{},
+    'conv':{},
+    'pool':{}
+}
+
+function FNN(struct, weights) {
+    
+}
+
 /*
 
 RNN.prototype.compute = function(input, output, params) {

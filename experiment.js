@@ -70,10 +70,10 @@ if (cluster.isMaster) {
     ga.initCluster();
     pr('genomeSize:',genomeSize);
     ga.executeGA({
-        popSize: 100,//2*genomeSize,
+        popSize: 50,//2*genomeSize,
         //winners: Math.floor(genomeSize*0.1),
         //losers: Math.floor(genomeSize*0.1),
-        winners: 2,
+        winners: 3,
         losers: 10,
         generations: 100,
         genomeSize: genomeSize,//Nweights,//20,
@@ -85,6 +85,7 @@ if (cluster.isMaster) {
         mutRate: function (n) { 2/(genomeSize*Math.log(n)) },
         fitnessFnName: "robotWorldFitnessMeasure",
         prngConstructor: util.prng,
+        genomeConstructor: Float32Array,
         parallel: true,
         onDone: function (bg, bf) {
             pr('Best genome:',bg);
