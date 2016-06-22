@@ -1,222 +1,38 @@
 
-var cluster = require('cluster');
-var fs = require('fs');
 var pr = console.log;
 var util = require('./util.js');
+var fs = require('fs');
 
-var numCpus = require('os').cpus().length;
-
-//Cluster bookkeeping
-
-globNworkers = 4;
-workers = [];
-taskCallback = false;
-waitTask = true;
-expectResult = false;
-
-addOne = function(x) { return x+1; }
-sqrOne = function(x) { return x*x; }
-
-function arraysEqual(a, b) {
-    if (a === b) return true;
-    if (a == null || b == null) return false;
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; ++i) {
-        if (a[i] !== b[i]) return false;
-    }
-    return true;
-}
-
-function initCluster(nworkers) {
-    
-    if (workers.length) return;
-    
-    nworkers = nworkers || numCpus;
-    globNworkers = nworkers;
-    
-    pr('Master pid:' + process.pid + ' started.');
-    
-    function handleMsg(msg) {
-        //pr('handleMsg');
-        if (waitTask && msg.msg == 'done') {
-            var i;
-            var busy = 0;
-            for (i=0; i<workers.length; i++) {
-                if (workers[i].pid == msg.pid) {
-                    if (expectResult) { workers[i].result = msg.result; }
-                    workers[i].busy = false;
-                } else {
-                    if (workers[i].busy == true) busy++;
-                }
-            }
-            //pr(busy);
-            if (busy == 0) {
-                //pr('Done pExecTasks()');
-                if (expectResult) {
-                    var results = [];
-                    var i;
-                    for (i=0; i<workers.length; i++) {
-                        results.push(workers[i].result);
-                    }
-                    var result = Array.prototype.concat.apply([],results);
-                    if (typeof taskCallback == 'function') { taskCallback(result); }
-                } else {
-                    if (typeof taskCallback == 'function') { taskCallback(); }                
-                }
-                //pr(result);
-            }
-        }
-    }
-    
-    //Fork workers.
-    var i;
-    for (i=0; i<globNworkers; i++) {
-        var worker = cluster.fork();
-        workers[i] = {worker: worker, pid: worker.process.pid, busy: false, result: []};
-        
-        //Receive messages from this worker and handle them in the master process.
-        worker.on('message', handleMsg);
-        
-        //Send a message from the master process to the worker.
-        //worker.send({msg: 'ping', pid: process.pid});
-    }
-    // Be notified when worker processes die.
-    cluster.on('death', function(worker) {
-        pr('Worker ' + worker.pid + ' died.');
-    });
-}
- 
-if (cluster.isWorker) {
-    pr('Worker pid:' + process.pid + ' started.');
- 
-    // Send message to master process.
-    //process.send({msg: 'ready', pid: process.pid});
- 
-    // Receive messages from the master process.
-    process.on('message', function(msg) {
-        //pr('Worker ' + process.pid + ' received message from master.', msg);
-        
-        if (msg.msg == 'execfn' && typeof msg.fnname == 'string'
-            && typeof GLOBAL[msg.fnname] == 'function') {
-            
-            var f = GLOBAL[msg.fnname];
-            
-            f();
-            
-            process.send({msg: 'done', pid: process.pid});
-            
-        } else if (msg.msg == 'dotask' && typeof msg.fnname == 'string'
-            && typeof GLOBAL[msg.fnname] == 'function'
-            && msg.data && typeof msg.data.length == 'number') {
-            
-            var f = GLOBAL[msg.fnname];
-            var i;
-            var result = new Array(msg.data.length);
-            for (i=0; i<msg.data.length; i++) {
-                result[i] = f(msg.data[i]);
-            }
-            
-            process.send({msg: 'done', pid: process.pid, result: result});
-        } else {
-            pr('Worker ' + process.pid + ' message error: cannot decode');
-        }
-    });
-}
-
+//Default task execution engine
+//It is used as a default way of executing fitness assessment
 function sExecTasks(tasks, fnname, onComplete) {
     var i;
-    var f = GLOBAL[fnname];
+    var f = global[fnname];
     if (!f) { pr('sExecTasks error: fnname "'+fnname+'" doesn\'t correspond to any global function') }
     var result = new Array(tasks.length);
     for (i=0; i<tasks.length; i++) {
         result[i] = f(tasks[i]);
     }
-    onComplete(result);
+    if (onComplete) onComplete(result);
 }
 
-function pExecTasks(tasks, fnname, onComplete) {
-    //pr('Start pExecTasks(), tasks.length='+tasks.length+', fnname="'+fnname+'"');
-    var i,j;
-    var f = GLOBAL[fnname];
-    if (!f) { pr('sExecTasks error: fnname "'+fnname+'" doesn\'t correspond to any global function') }
-      
-    var lists = new Array(globNworkers);
-    for (i=0; i<globNworkers; i++) { lists[i] = [] };
-    
-    if (tasks.length < workers.length) {
-        for (i=0; i<tasks.length; i++) {
-            lists[i].push(tasks[i]);
-        }
-    } else {
-        var N = Math.floor(tasks.length/workers.length);
-        for (i=0; i<workers.length; i++) {
-            if (i == workers.length-1) {
-                for (j=i*N; j<tasks.length; j++) {
-                    lists[i].push(tasks[j]);
-                }
-            } else {
-                for (j=0; j<N; j++) {
-                    lists[i].push(tasks[j+i*N]);
-                }
-            }
-        }
-    }
-    
-    taskCallback = onComplete;
-    waitTask = true;
-    expectResult = true;
-    
-    for (i=0; i<globNworkers; i++) {
-        workers[i].worker.send({msg: 'dotask', fnname: fnname, data: lists[i]});
-        workers[i].busy = true;
-    };
+function timeDiff(startTime, stopTime, digits) {
+    digits = digits || 3;
+    stopTime = stopTime || Date.now();
+    return ((stopTime-startTime)/1000).toFixed(digits)+'s';
 }
 
-
-function pExecFn(fnname, onComplete) {
-    //pr('Start pExecFn(), fnname="'+fnname+'"');
-    var i;
-    var f = GLOBAL[fnname];
-    if (!f) { pr('sExecTasks error: fnname "'+fnname+'" doesn\'t correspond to any global function') }
-        
-    taskCallback = onComplete;
-    waitTask = true;
-    expectResult = false;
-    
-    for (i=0; i<globNworkers; i++) {
-        workers[i].worker.send({msg: 'execfn', fnname: fnname});
-        workers[i].busy = true;
-    };
-}
-
-
-function testCluster(onDone) {
-    var data = [];
-    var out = [];
-    for (var i=0; i<999; i++) { data[i] = Math.random() }
-    var out1, out2;
-    initCluster(numCpus);
-    pr('Start Cluster Tests');
-    sExecTasks(data, 'sqrOne', function (res) {
-        out1 = res;
-        pExecTasks(data, 'sqrOne', function (res) {
-            out2 = res;
-            if (arraysEqual(out1, out2)) { pr('Cluster TESTS OK') }
-            else { pr('Cluster TESTS FAILED!!!') }
-            if (onDone) { onDone() }
-            else { process.exit() }
-        });
-    });
-}
 
 //Genetic algorithm
 
+//Crude approximation of normal distribution
 function randNormal(mean, sigma, random) {
     return sigma*(random()+random()+random()-1.5)+mean;
 }
 
-function defRecombine(genomeA, genomeB, output, random) {
-    //random = random || Math.random;
+function recombineFloatArrays(genomeA, genomeB, output, params, random) {
+    var mean = params.mean;
+    var sigma = params.sigma;
     for (i=0; i<genomeA.length; i++) {
         if (random() > 0.5) {
             var weight = random();
@@ -225,10 +41,12 @@ function defRecombine(genomeA, genomeB, output, random) {
     }
 }
 
-function defMutate(genome, rate, mean, sigma, random) {
-    //random = random || Math.random;
+function mutateFloatArrays(genome, params, random) {
+    var mutRate = params.mutRate;
+    var mean = params.mean;
+    var sigma = params.sigma;
     for (i=0; i<genome.length; i++) {
-        if (random() < rate) {
+        if (random() < mutRate) {
             genome[i] = randNormal(mean, sigma, random);
         }
     }
@@ -242,29 +60,120 @@ function descendingOrder(a,b) {
     }
 };
 
+function makeInitRandNormal(genomeSize) {
+    return function (i, params, random) {
+        var genome = new Array(genomeSize);
+        for (j=0; j<genomeSize; j++) {
+            genome[j] = randNormal(params.mean, params.sigma, random);
+        }
+        return genome;
+    }
+}
 
-function executeGA(experiment) {
+// conf: {...} 
+// .winners
+// .threshold
+// .mutInit
+// .mutMax
+// .mutMin
+// .mutFactor
+// .mutRestartOnMin
+function makeAdaptiveMutRate(conf) {
+    var _mutRate = conf.mutInit;
+    var _waitCounter = 0;
+    var _prevBestFit = 0;
+    var _fitStagnationCount = 0;
+    return function(gen, bestGenome, bestFitness, parentFit, minFit, avgFit, maxFit, opParams, population, gaconf) {
+        var Nbetter = 0;
+        var compareFit = parentFit;
+        var _start = gaconf.preserveWinners ? gaconf.winners : 0;
+        for (var i=_start; i<population.length; i++) {
+            if (population[i].fitness > compareFit) { Nbetter++ }
+            else { break }
+        }
+        var change = '-';
+        if (Nbetter/population.length > conf.threshold) { change = '+'; _mutRate *= conf.mutFactor }
+        else { _mutRate /= conf.mutFactor }
+        if (conf.mutRestartOnMin && (_mutRate <= conf.mutMin)) { change = 'restarted(mutMin reached)'; _mutRate = conf.mutInit; }
+        _mutRate = Math.min(conf.mutMax, Math.max(conf.mutMin, _mutRate));
+           
+        //If fitness improvement stagnates for too long, restart mutation rate
+        if (conf.mutRestartOnStagnation) {
+            if (bestFitness === _prevBestFit) {
+                _fitStagnationCount++;
+                if (_fitStagnationCount >= conf.mutRestartOnStagnation) { change = 'restarted'; _mutRate = conf.mutInit; }
+                _fitStagnationCount = 0;
+            } else {
+                _prevBestFit = bestFitness;
+                _fitStagnationCount = 0;
+            }
+        }
+        
+        pr('Mutation Rate ['+change+']:',_mutRate.toFixed(6),'parentFit:',parentFit.toFixed(2),'Nbetter:', Nbetter, 'pop:', population.length);
+        
+        return {mutRate: _mutRate};
+    }
+}
+
+function expFall(x, high, low, period, base) {
+    return ((high-low)/Math.pow(base, x/period))+low;
+}
+
+// conf: {...} 
+// initLow
+// initHigh
+// endHigh
+// endLow
+// smallPeriod
+// largePeriod
+// [smallK]
+// [base]
+function makeExpAnnealingMutRate(conf) {
+    return function(gen) {
+        var high = expFall(gen, conf.initHigh, conf.endHigh, conf.largePeriod, conf.base || 2);
+        var low = expFall(gen, conf.initLow, conf.endLow, conf.largePeriod, conf.base || 2);
+        var x = gen % conf.smallPeriod;
+        var mRate = expFall(x, high, low, conf.smallPeriod/(conf.smallK || 5), conf.base || 2);
+        pr('Mutation Rate:', mRate);
+        return {mutRate: mRate};
+    }
+}
+
+function Individual() {
+    this.genome = false;
+    this.fitness = false;
+    this.s = false;
+}
+
+// Run simple GA algorithm to mximize some fitness function
+// See lower for configuration example and parameter specs
+function runSimpleGA(experiment) {
     
     var conf = experiment;
     
-    if (!conf.prngConstructor) {
-        pr('No PRNG class given, aborting');
+    if (!conf.initParams) { conf.initParams = {}; pr('No initParams given to GA') }
+    if (!conf.opParams) { conf.opParams = {}; pr('No opParams given to GA') }
+    if (typeof conf.initGenome !== 'function') { pr('No initGenome function given. You need to define it as a function that returns instance of your problem-specific genome') }
+    if (typeof conf.copyGenome !== 'function') { conf.copyGenome = util.clone; pr('No copyGenome function given. Using util.clone') }
+    
+    var executeTasks = conf.executeTasks || sExecTasks;
+    if (!conf.executeTasks) pr('Using default serial task executor, pass executeTasks in config to override');
+    
+    var rootPrng;
+    
+    if (!conf.prngClass) {
+        pr('No PRNG class given, using Math.random as random source');
+        var random = Math.random;
+        var randInt = function (maxInt) {
+            maxInt = maxInt || 2147483647;
+            return Math.floor(maxInt*Math.random())
+        };
+    } else {
+        if (!conf.seed) { conf.seed = 41236612; pr('No seed given, initialized to default', conf.seed) }
+        rootPrng = new conf.prngClass(conf.seed);
+        var random = function () { return rootPrng.next() };
+        var randInt = function (maxInt) { if (maxInt) { return rootPrng.nextInt() % maxInt } else { return rootPrng.nextInt() } };
     }
-    
-    if (!conf.seed) {
-        conf.seed = 41236612;
-        pr('No seed given, initialized to default',conf.seed);
-    }
-    
-    if (!conf.genomeConstructor) {
-        conf.genomeConstructor = Array;
-    }
-    //pr(conf.genomeConstructor);
-    
-    var rootPrng = new conf.prngConstructor(conf.seed);
-    
-    var random = function () { return rootPrng.next() };
-    var randInt = function (maxInt) { if (maxInt) { return rootPrng.nextInt() % maxInt } else { return rootPrng.nextInt() } };
     //if (!random) { random = Math.random; pr('Using Math.random() as random source') }
     
     var population = new Array(conf.popSize);
@@ -272,122 +181,129 @@ function executeGA(experiment) {
     var bestFitness = -Infinity;
     var i,j,gen;
     
-    var mutate = conf.mutate || defMutate;
-    var recombine = conf.recombine || defRecombine;
+    var mutate = conf.mutate || mutateFloatArrays;
+    var recombine = conf.recombine || recombineFloatArrays;
     
+    // Initialize population
     for (i=0; i<conf.popSize; i++) {
-        population[i] = {};
+        population[i] = new Individual();//{};
         
-        //Generate separate prng for each genome to ensure determinism even when evolved in parallel
-        var prng = new conf.prngConstructor(rootPrng.nextInt());
-        
-        for (j=0; j<i; j++) {
-            if (population[j].prng.state == prng.state) {
-                pr('prng seed collision');
-                prng = new Prng(rootPrng.nextInt());
+        //Generate separate prng for each genome to ensure determinism even when evolved in parallel        
+        if (conf.prngClass) {
+            var prng = new conf.prngClass(rootPrng.nextInt()^719237793);
+            /*
+            for (j=0; j<i; j++) {
+                if (population[j].prng.state == prng.state) {
+                    pr('prng seed collision');
+                    prng = new Prng(rootPrng.nextInt()^119931793);
+                }
             }
+            */
+            
+            //Set state of pop element to prng state
+            population[i].s = prng.toState();
         }
         
-        population[i].prng = prng;
-        population[i].random = function () { return prng.next() };
-        population[i].genome = new conf.genomeConstructor(conf.genomeSize);
-        
-        var genome = population[i].genome;
-        for (j=0; j<conf.genomeSize; j++) {
-            genome[j] = randNormal(conf.initMean, conf.initSigma, random);
-        }
+        population[i].genome = conf.initGenome(i, conf.initParams, random);
     }
-       
-    function evolveGeneration(onComplete) {
-        
-        var t1 = Date.now();
-        var fitResult;
-        var fitnessMeasure = GLOBAL[conf.fitnessFnName];
-        
-        for (i=0; i<conf.popSize; i++) {
-            fitResult = fitnessMeasure(population[i]);
-            population[i].fitness = fitResult.f;
-            population[i].prng.state = fitResult.ps;
-        }
-        
-        population.sort(descendingOrder);
-        
-        if (bestFitness < population[0].fitness) {
-            bestFitness = population[0].fitness;
-            bestGenome = population[0].genome.slice(); //Copy element by element
-            GLOBAL.bestFitness = bestFitness;
-            GLOBAL.bestGenome = bestGenome;
-        }
-        
-        for (i=0; i<(conf.popSize-conf.winners-conf.losers); i++) {
-            recombine(population[randInt(conf.winners)].genome,
-                      population[randInt(conf.winners)].genome,
-                      population[conf.winners+i].genome,
-                      random);
-        }
-        
-        var mutRate;
-        if (typeof conf.mutRate == 'function') { mutRate = conf.mutRate(gen); }
-        else { mutRate = conf.mutRate };
-        
-        for (i=0; i<(conf.popSize); i++) {
-            mutate(population[i].genome, mutRate, conf.initMean, conf.initSigma, random);
-        }
-        
-        var t2 = Date.now();
-        var seconds = (t2-t1)/1000;
-        
-        if (!conf.silent) pr('Gen '+gen+'; gen_best: '+population[0].fitness+' overall_best: '+bestFitness+' time: '+seconds);
-        if (gen % 10 == 0) fs.writeFileSync('bestgenome.json', JSON.stringify(bestGenome));
     
-    }
+    var parentFit = 0;
+    var _timeSinceBest = 0;
     
     function evolveGenerations(onComplete) {
         var t1 = Date.now();
+        var t2 = Date.now();
+        var t3 = Date.now();
+        var history = [];
         
         function processPopulation(result) {
             
+            t3 = Date.now();
+            pr('Fitness evaluation time:',timeDiff(t2, t3));
+            
             var i;
-            var fitAvg = 0;
             
             for (i=0; i<conf.popSize; i++) {
                 population[i].fitness = result[i].f;
-                population[i].prng.state = result[i].ps;
-                fitAvg += result[i].f;
+                if (conf.prngClass) { population[i].s = result[i].s || population[i].s }
             }
             
-            fitAvg /= conf.popSize;
-            
+            //Sort by fitness and compute fitness stats
             population.sort(descendingOrder);
+            
+            var avgFit = 0;
+            for (i=0; i<conf.popSize; i++) { avgFit += population[i].fitness }
+            avgFit /= conf.popSize;
+            
+            var minFit = population[population.length-1].fitness;
+            var maxFit = population[0].fitness;
             
             if (bestFitness < population[0].fitness) {
                 bestFitness = population[0].fitness;
-                bestGenome = population[0].genome.slice(); //Copy element by element
-                GLOBAL.bestFitness = bestFitness;
-                GLOBAL.bestGenome = bestGenome;
+                bestGenome = conf.copyGenome(population[0].genome); //Copy element by element
+                _timeSinceBest = 0;
+            } else {
+                _timeSinceBest++;
+                if (conf.bestReseedAfter && _timeSinceBest >= conf.bestReseedAfter) {
+                    population[0] = new Individual();
+                    population[0].genome = conf.copyGenome(bestGenome);
+                    population[0].fitness = bestFitness;
+                    pr('[',_timeSinceBest,'gens passed since last bestGenome, reseeding population[0] to bestGenome]');
+                    _timeSinceBest = 0;
+                }
             }
             
-            for (i=0; i<(conf.popSize-conf.winners-conf.losers); i++) {
-                recombine(population[randInt(conf.winners)].genome,
-                          population[randInt(conf.winners)].genome,
-                          population[conf.winners+i].genome,
-                          random);
-            }
+            //history.push({best: bestFitness, avg: avgFit});
             
-            var mutRate;
-            if (typeof conf.mutRate == 'function') { mutRate = conf.mutRate(gen); }
-            else { mutRate = conf.mutRate };
+            //Compute or retrieve parameters that are passed to mutate() and recombine GA operators. These may include mutation rate, etc
+            var opParams = conf.opParams;
+            if (typeof conf.opParams == 'function') { opParams = conf.opParams(gen, bestGenome, bestFitness, parentFit, minFit, avgFit, maxFit, opParams, population, conf); }
+            
+            parentFit = 0;
+            
+            if (conf.preserveWinners) {            
+                for (i=0; i<(conf.popSize-conf.winners-conf.losers); i++) {
+                    var parentA = population[randInt(conf.winners)];
+                    var parentB = population[randInt(conf.winners)];
+                    parentFit += (parentA.fitness + parentB.fitness);
+                    //Update parents avg fitness
+                    recombine(parentA.genome,
+                              parentB.genome,
+                              population[conf.winners+i].genome,
+                              opParams,
+                              random);
+                }
+                //Normalize parentFit
+                parentFit /= i*2;
+            } else {
+                var winners = population.slice(0, conf.winners).map(conf.copyGenome);
+                for (i=0; i<(conf.popSize-conf.losers); i++) {
+                    var parentA = winners[randInt(conf.winners)];
+                    var parentB = winners[randInt(conf.winners)];
+                    parentFit += (parentA.fitness + parentB.fitness);
+                    //Update parents avg fitness
+                    recombine(parentA.genome,
+                              parentB.genome,
+                              population[i].genome,
+                              opParams,
+                              random);
+                }
+                //Normalize parentFit
+                parentFit /= i*2;
+            }
             
             for (i=1; i<(conf.popSize); i++) {
-                mutate(population[i].genome, mutRate, conf.initMean, conf.initSigma, random);
+                mutate(population[i].genome, opParams, random);
             }
             
-            var t2 = Date.now();
-            var seconds = (t2-t1)/1000;
+            if (conf.onGenDone) { conf.onGenDone(gen, bestGenome, bestFitness, parentFit, minFit, avgFit, maxFit, opParams, population) }
             
-            if (!conf.silent) pr('Gen '+gen+'; avg:'+fitAvg+' gen_best: '+population[0].fitness+' overall_best: '+bestFitness+' time: '+seconds);
-                if (gen % 10 == 0) fs.writeFileSync('bestgenome.json', JSON.stringify(bestGenome));
-                
+            if (!conf.silent) {
+                pr('Gen '+gen+'; avgFit:'+avgFit+' maxFit: '+maxFit+' bestFit: '+bestFitness+
+                (_timeSinceBest ? '\nbestFitness was '+_timeSinceBest+' ago' : '')+
+                '\nTime: [total: '+timeDiff(t1)+' fit: '+timeDiff(t2, t3)+' ga: '+timeDiff(t3)+']');
+            }
+            
             gen = gen + 1;
             if (gen >= conf.generations) {
                 if (typeof onComplete == 'function') { process.nextTick(onComplete); }
@@ -395,18 +311,14 @@ function executeGA(experiment) {
                 process.nextTick(function () { evolveGenerations(onComplete) });
             }
         }
-        //pr('pop',population.length);
-        if (conf.parallel) {
-            pExecTasks(population, conf.fitnessFnName, processPopulation);
-        } else {
-            sExecTasks(population, conf.fitnessFnName, processPopulation);
-        }
+        t2 = Date.now();
+        executeTasks(population, conf.fitnessFnName, processPopulation);
     }
     
     function onEnd() {
         pr('Stop, '+gen+' generations evaluated\nbest fitness: '+bestFitness+'\nbest genome: '+JSON.stringify(bestGenome));
         fs.writeFileSync('bestgenome.json', JSON.stringify(bestGenome));
-        if (conf.onDone) { conf.onDone(bestGenome, bestFitness) };
+        if (conf.onDone) { conf.onDone(bestGenome, bestFitness, gen) };
     }
     
     pr('Start');
@@ -442,18 +354,41 @@ prepareGAtest = function() {
 function test(parallel, onDone) {
     
     var conf = {
+        // Number of genomes in population
         popSize: 30,
+        // Number of winners that are selected and recombined at the end of the generation to create new genomes
         winners: 3,
+        // Number of losers that are not replaced by newly generated genomes on every generation. They are only mutated
         losers: 5,
+        //Preserve winner parents or replace them with offspring too
+        preserveWinners: true,
+        // Max number of generations to evolve
         generations: 100,
-        genomeSize: 10,
-        initMean: 0,
-        initSigma: 1,
-        mutRate: 0.03,
+        // Optional prng constructor, use it to enforce deterministic experiments but be careful
+        // - if prng's random number quality is bad it will interfere with GA operation.
+        // If no prngClass is given a standard Math.random is used everywhere
+        prngClass: util.prng,
+        // A function that is called as conf.initGenome(conf.initParams) to create genomes for initial population
+        initGenome: makeInitRandNormal(10),
+        initParams: { mean: 0, sigma: 1},
+        // Either a value/object that contains parameters that are passed to mutate & recombine,
+        // Or a function that produces these parameters when called like this: conf.opParams(generationNumber, history)
+        opParams: { mutRate: 0.03, mean: 0, sigma: 1 },
+        // Mutation operator: should change a genome given opParams and random source.
+        // mutate(genomeInstance, opParams, random);
+        mutate: mutateFloatArrays,
+        // Recombination operator: should write new genome into the thrid genome argument given two parent genome arguments,
+        // opParams and random source.
+        // recombine(genomeParentA, genomeParentB, genomeChild, opParams, random)
+        recombine: recombineFloatArrays,
+        // Fitness function represents a goal for GA. It should be a global function named conf.fitnessFnName
+        // It is called like this: global[conf.fitnessName]({genome: genomeInstance, s:serializableState}) and should
+        // return {f: fitnessResultNumber, s: (serializableState or updated serializableState)}
+        // s is a [rp[erty that contains individual state, e.g. prng state. It may help to ensure determinism if 
+        // population is evaluated in parallel partitioned over a cluster
         fitnessFnName: "testGAFitness",
-        parallel: false,
-        prngConstructor: util.prng,
-        silent: true,
+        //Suppress verbose logging
+        silent: false,
         onDone: function (bg, bf) {
             pr('GA test done, goal was='+JSON.stringify(goal));
             if (onDone) onDone(bg, bf);
@@ -464,31 +399,22 @@ function test(parallel, onDone) {
     pr('GA test started');
     
     prepareGAtest();
-    executeGA(conf);
+    runSimpleGA(conf);
 }
 
 module.exports = {
     test: test,
-    initCluster: initCluster,
-    executeGA: executeGA
+    runSimpleGA: runSimpleGA,
+    makeInitRandNormal: makeInitRandNormal,
+    randNormal: randNormal,
+    recombineFloatArrays: recombineFloatArrays,
+    mutateFloatArrays: mutateFloatArrays,
+    makeAdaptiveMutRate: makeAdaptiveMutRate,
+    expFall: expFall,
+    makeExpAnnealingMutRate: makeExpAnnealingMutRate
 }
 
-if (require.main === module && cluster.isMaster) {
-
-    initCluster(numCpus);
-    
-    testCluster(function () {
-        pExecFn('prepareGAtest', function () {
-            test(false, function (bestGenomeSer) {
-                test(true, function (bestGenomePar) {
-                    if (arraysEqual(bestGenomeSer, bestGenomePar)) {
-                        pr('SERIAL VS PARALLEL EVOLUTION OUTCOME IDENTICAL');
-                        pr('TESTS OK');
-                        process.exit();
-                    }
-                });
-            });
-        });
-    });
+if (require.main === module) {
+    test(false, function () { pr('DONE') });
 }
 

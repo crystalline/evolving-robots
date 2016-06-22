@@ -63,10 +63,10 @@ util = {
         return a;
     },
     //Very simple pseudorandom number generator
-    prng: function(seed) {
+    prng: function(seed, state) {
         this.seed = seed % 2147483647;
         if (this.seed <= 0) this.seed += 2147483646;
-        this.state = this.seed;
+        this.state = state || this.seed;
     },
     //Simple tracker of an average value
     avgTracker: function() {
@@ -109,18 +109,13 @@ util.avgTracker.prototype.getRounded = function(N) {
 util.prng.prototype.nextInt = function () {
     return this.state = this.state * 16807 % 2147483647;
 };
-
-util.prng.prototype.getState = function () {
-    return this.state;
-};
-
 util.prng.prototype.next = function () {
     // We know that result of next() will be 1 to 2147483646 (inclusive).
     return (this.nextInt() - 1) / 2147483646;
 };
-
+util.prng.prototype.toState = function () { return [this.state, this.seed] };
+util.prng.prototype.fromState = function (state) { return new util.prng(state[1], state[0]) };
 util.prng.prototype.reset = function() { this.state = this.seed };
-
 util.prng.prototype.test = function() {
     var s = 0;
     for (var i = 0; i<1000; i++) {
@@ -130,44 +125,6 @@ util.prng.prototype.test = function() {
     console.log('Expected value: '+s/1000);
     this.reset();
 };
-
-//ProgressMeter
-var readline = require('readline');
-
-var rl = false;
-
-function ProgressMeter(progFn, units) {
-    if (!rl) { 
-        rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-    }
-    this.start = Date.now();
-    this.time = this.start;
-    this.units = units || 'chars';
-    this.progFn = progFn || function (x) { return x; }
-    console.log('Progress: '+this.progFn(0)+' '+this.units);
-    return this;
-}
-
-ProgressMeter.prototype.progress = function (counter) {
-    var t = Date.now();
-    if (t - this.time > 50) {
-        this.time = t
-        readline.clearLine(rl, -1);
-        readline.moveCursor(rl, 0, -1);
-        console.log('Progress: '+this.progFn(counter)+' '+this.units);    
-    }
-};
-
-ProgressMeter.prototype.end = function (counter) {
-    readline.clearLine(rl, 0);
-    readline.moveCursor(rl, 0, -1);
-    console.log('Progress: '+this.progFn(counter)+' '+this.units);
-};
-
-util.ProgressMeter = ProgressMeter;
 
 //Levenstein distance
 
@@ -216,6 +173,36 @@ function levenDist(str1, str2) {
 
 util.levenDist = levenDist;
 
+function Bitfield(n) {
+    this.d = new Uint32Array(Math.ceil(n/32));
+    return this;
+}
+
+Bitfield.prototype.get = function(i) {
+    var word = i >> 5;
+    var bit = i - (word << 5);
+    return this.d[word] >> i & 1;
+};
+
+Bitfield.prototype.set = function(i, val) {
+    var word = i >> 5;
+    var bit = i - (word << 5);
+    if (val)
+        this.d[word] |= (1 << i);
+    else
+        this.d[word] &= ~(1 << i);
+    return val;
+};
+
+util.bitfield = Bitfield;
+
+function timeDiff(startTime, digits) {
+    digits = digits || 1;
+    return ((Date.now()-startTime)/1000).toFixed(digits)+'s';
+}
+
+util.timeDiff = timeDiff;
+
 //return array of {k: key, v: value} objects sorted by getNumber(obj[key], key) (or by key if
 //getNumber is not given
 //in descending (high first) order
@@ -230,10 +217,35 @@ function sortObject(obj, getNumber) {
 
 util.sortObject = sortObject;
 
+var arrayLike = [Array, Uint8Array, Uint8ClampedArray, Int8Array, Uint16Array, Int16Array, Uint32Array, Int32Array, Float32Array, Float64Array];
+
+function clone(o) {
+   if (o === null || typeof o !== 'object') return o;
+   var ret, key, value;
+   var arrCons;
+   if (o.constructor && typeof o.length === 'number' && ((arrCons = arrayLike.indexOf(o.constructor)) !== -1)) {
+      ret = new arrayLike[arrCons](o.length);
+      for (var i=0; i<o.length; i++) { ret[i] = clone(o[i]) }
+      return ret;
+   }
+   ret = {};
+   for (key in o) {
+       if (o.hasOwnProperty(key)) {
+           value = o[key];
+           if (value === null || typeof value !== 'object') { ret[key] = value }
+           else { ret[key] = clone(value) }
+       }
+   }
+   return ret;
+}
+
+util.clone = clone;
+
+
 //Russian language utilities
 
 try {
-    if (GLOBAL) {
+    if (global) {
         module.exports = util;
     }
 } catch (e) {}

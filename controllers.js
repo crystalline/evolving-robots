@@ -1,98 +1,60 @@
 
+var Tensor = require('./tensor.js').Tensor;
 var pr = console.log;
 
-perceptron1L.prototype.compute = function(input, output, params) {
+function RNN(Ninputs, Noutputs, Nstate,
+             W_InSt, W_StSt, W_StOut, initWeights) {
+    this.Ni = Ninputs;
+    this.No = Noutputs;
+    this.Ns = Nstate;
     
-    output = output || new Float32Array(this.no);
-    var i,j, base, bias, out;
-    var weights = params || this.w;
+    this.state = new Tensor([this.Ns]);
+    this.temp = new Tensor([this.Ns]);
     
-    for (j=0; j<this.no; j++) {
-        base = j*this.ni+1;
-        bias = weights[base+this.ni];
-        out = bias;
-        for (i=0; i<this.ni; i++) {
-            out += input[i]*weights[base+i];
-        }
-        output[j] = out;
-    }
-}
-
-perceptron1L.prototype.nparams = function () {
-    return this.no*(this.ni+1);
-}
-
-function perceptron1L(Ninputs, Noutputs, weights) {
-    this.ni = Ninputs;
-    this.no = Noutputs;
-    this.w = weights;
-}
-
-function perceptron1L(Ninputs, Noutputs, weights) {
-    this.ni = Ninputs;
-    this.no = Noutputs;
-    this.w = weights;
-}
-
-var layers = {
-    'dense':{},
-    'conv':{},
-    'pool':{}
-}
-
-function FNN(struct, weights) {
+    this.W_InSt = W_InSt || new Tensor([this.Ns, this.Ni]);
+    this.W_StSt = W_StSt || new Tensor([this.Ns, this.Ns]);
+    this.W_StOut = W_StOut || new Tensor([this.No, this.Ns]);
+    this.params = [this.W_InSt, this.W_StSt, this.W_StOut];
     
+    this.Nparams = (this.W_InSt.size + this.W_StSt.size + this.W_StOut.size);
+    
+    if (initWeights) initWeights(this);
+};
+
+RNN.prototype.compute = function(input, output) {
+    this.W_StSt.dot(this.state, this.temp);
+    this.W_InSt.dot(input, this.state);
+    this.state.add(this.temp);
+    this.state.map(Math.tanh);
+    this.W_StOut.dot(this.state, output);
+};
+
+RNN.prototype.setParamsFromArray = function(arr, offset) {
+    offset = offset || 0;
+    if ((arr.length-offset) < this.Nparams) {
+        pr('Error: Trying to init RNN from an array of insufficient length');
+        return;
+    }
+    this.W_InSt.data = arr;
+    this.W_InSt.dataOffset = offset;
+    offset += this.W_InSt.size;
+    this.W_StSt.data = arr;
+    this.W_StSt.dataOffset = offset;
+    offset += this.W_StSt.size;
+    this.W_StOut.data = arr;
+    this.W_StOut.dataOffset = offset;
 }
 
-/*
+RNN.prototype.reset = function() {
+    this.state.init( x => 0 );
+};
 
-RNN.prototype.compute = function(input, output, params) {
-    var i,j;
-    var base;
-    for(i=0; i<2; i++) {
-        base = i*Nline;
-        outputs[i] = 0;
-        for(j=0; j<Nstate; j++) {
-            outputs[i] += weights[base+j] * state[j];
-        }
-        base += Nstate;
-        for(j=0; j<N; j++) {
-            outputs[i] += weights[base+j] * inputs[j];
-        }
-        base += N;
-        outputs[i] += weights[base];
-        outputs[i] = sigmoid(outputs[i]);
-    }
-    for(i=0; i<Nstate; i++) {
-        base = (i+2)*Nline;
-        temp[i] = 0;
-        for(j=0; j<Nstate; j++) {
-            temp[i] += weights[base+j] * state[j];
-        }
-        base += Nstate;
-        for(j=0; j<N; j++) {
-            temp[i] += weights[base+j] * inputs[j];
-        }
-        base += N;
-        temp[i] += weights[base];
-        temp[i] = sigmoid(temp[i]);
-    }
-    for(i=0; i<Nstate; i++) {
-        state[i] = temp[i];
-    }
-}
-
-function RNN(Ninputs, Noutputs, weights) {
-    this.ni = Ninputs;
-    this.no = Noutputs;
-    this.w = weights;
-}
-
-
-*/
+RNN.prototype.print = function() {
+    pr('RNN:');
+    pr('Ninputs:',this.Ni,'Noutputs:',this.No,'Nstate:',this.Ns,'Nparams:',this.Nparams);
+};
 
 module.exports = {
-    perceptron1L: perceptron1L
-}
-
+    RNN: RNN
+};
 
