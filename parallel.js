@@ -83,9 +83,9 @@ if (cluster.isWorker) {
     // Receive messages from the master process.
     process.on('message', function(msg) {
         //pr('Worker ' + process.pid + ' received message from master.', msg);
-        if (msg.msg == 'dotask' && typeof msg.fnname == 'string' && typeof GLOBAL[msg.fnname] == 'function'
+        if (msg.msg == 'dotask' && typeof msg.fnname == 'string' && typeof global[msg.fnname] == 'function'
             && msg.data && typeof msg.data.length == 'number') {
-            var f = GLOBAL[msg.fnname];
+            var f = global[msg.fnname];
             var i;
             var result = new Array(msg.data.length);
             for (i=0; i<msg.data.length; i++) {
@@ -98,7 +98,7 @@ if (cluster.isWorker) {
 
 function sExecTasks(tasks, fnname, onComplete) {
     var i;
-    var f = GLOBAL[fnname];
+    var f = global[fnname];
     if (!f) { pr('sExecTasks error: fnname "'+fnname+'" doesn\'t correspond to any global function') }
     var result = new Array(tasks.length);
     for (i=0; i<tasks.length; i++) {
@@ -109,7 +109,7 @@ function sExecTasks(tasks, fnname, onComplete) {
 
 function pExecTasks(tasks, fnname, onComplete) {
     var i,j;
-    var f = GLOBAL[fnname];
+    var f = global[fnname];
     if (!f) { pr('sExecTasks error: fnname "'+fnname+'" doesn\'t correspond to any global function') }
       
     var lists = new Array(globNworkers);

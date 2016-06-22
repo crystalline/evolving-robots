@@ -68,15 +68,34 @@ function test2dIndex() {
     
     var random = Math.random;
     
+    /* Comparison to C++ version    
+    int N = 10000000;
+    real L = 6.0;
+    int w = 500;
+    int h = 500;
+    real side = 1.1;
+    */
+    
+    /*
     var N = 150;
     var L = 1.5;
     var w = 1000;
     var h = 1000;
     var side = 1.1;
+    */
+
+    var N = 10000000;
+    var L = 6.0;
+    var w = 500;
+    var h = 500;
+    var side = 1.1;
+    
     var balls = [];
     var i,j;
     
     var index = new Index2d(side);
+
+    var t0 = Date.now();
     
     for (i=0; i<N; i++) {
         var ball = {x: random()*w, y: random()*h};
@@ -133,7 +152,15 @@ function test2dIndex() {
         }
     }
     
-    if (!fail) { console.log('Index2d tests passed, time \nreference:'+((t2-t1)/1000)+'\nindexed:'+((t3-t2)/1000)); }
+    if (!fail) {
+        console.log('Index2d tests passed, time');
+        console.log('Reference:',(t2-t1),'msec');
+        console.log('Indexed:',(t3-t2),'msec');
+        console.log('Total Time:',(t3-t0),'msec');
+        console.log('Speedup',(t2-t1)/(t3-t2),'times');
+    } else {
+        console.log('Index2d tests FAILED\n');
+    }
 }
 
 //Calculate intersection for ball and ray using trigonometry and vectors
