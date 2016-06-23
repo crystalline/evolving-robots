@@ -54,7 +54,46 @@ RNN.prototype.print = function() {
     pr('Ninputs:',this.Ni,'Noutputs:',this.No,'Nstate:',this.Ns,'Nparams:',this.Nparams);
 };
 
+function Perceptron(Ninputs, Noutputs, W, initWeights) {
+    this.Ni = Ninputs;
+    this.No = Noutputs;
+    this.temp = new Tensor([this.Ni+1]);
+    
+    this.W = W || new Tensor([this.No, this.Ni+1]);
+    this.Nparams = (this.W.size);
+    
+    if (initWeights) initWeights(this);
+};
+
+Perceptron.prototype.compute = function(input, output) {
+    //Extend input with 1 for bias computation
+    for (var i=input.dataOffset; i<input.dataOffset+this.Ni; i++) {
+        this.temp.data[i] = input.data[i];
+    }
+    this.temp.data[i] = 1;
+    
+    this.W.dot(this.temp, output);
+    output.map(Math.tanh);
+};
+
+Perceptron.prototype.setParamsFromArray = function(arr, offset) {
+    offset = offset || 0;
+    if ((arr.length-offset) < this.Nparams) {
+        pr('Error: Trying to init RNN from an array of insufficient length');
+        return;
+    }
+    this.W.data = arr;
+};
+
+Perceptron.prototype.reset = function() {};
+
+Perceptron.prototype.print = function() {
+    pr('perceptron:');
+    pr('Ninputs:',this.Ni,'Noutputs:',this.No,'Nparams:',this.Nparams);
+};
+
 module.exports = {
-    RNN: RNN
+    RNN: RNN,
+    Perceptron: Perceptron
 };
 

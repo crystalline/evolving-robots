@@ -452,8 +452,6 @@ function RobotWorldModel(conf) {
         console.log('avg ball dist: '+Math.sqrt(distacc));
         */
     }
-    
-    return this;
 }
 
 function testRobotSimPerf(random) {

@@ -8,6 +8,16 @@ var controllers = require('./controllers.js');
 
 var pr = console.log;
 
+function L2square(x1,y1,x2,y2) {
+    var dx = x1-x2;
+    var dy = y1-y2;
+    return dx*dx+dy*dy
+}
+
+function L2distance(x1,y1,x2,y2) {
+    return Math.sqrt(L2square(x1,y1,x2,y2));
+}
+
 function approxNormal(mean, variance) {
     var sum = 0;
     sum += Math.random() - 0.5;
@@ -75,6 +85,7 @@ var maxSpeed = 4;
 var maxDistance = maxSpeed*simSteps*simDT;
 
 var controller = new controllers.RNN(9, 2, 10);
+//var controller = new controllers.Perceptron(9, 2);
 var genomeSize = controller.Nparams;
 
 robotWorldFitness = function(individual) {
@@ -85,7 +96,7 @@ robotWorldFitness = function(individual) {
     var model = new robotsim.RobotWorldModel({random: Math.random});
     
     var speed = new Tensor([2], new Float64Array([0,0]));
-    var vision = new Tensor([model.vision.length], model.vision.data);
+    var vision = new Tensor([model.vision.length], model.vision);
     var distTraveled = 0;
     var collisionSteps = 0;
     var px = model.x, py = model.y;
@@ -93,28 +104,20 @@ robotWorldFitness = function(individual) {
     
     var visitedSectors = {};
     
+    controller.reset && controller.reset();
     controller.setParamsFromArray(genome);
-    
-    /*
-    var temp = new Float32Array(Ntemp);
-    var state =  new Float32Array(Ntemp);
-    for (i=0; i<Ntemp; i++) { temp[i] = 0; state[i] = 0; }
-    
-    var weights = harmonicWeightInit(genome);
-    */
         
     for (i=0; i<simSteps; i++) {
-        model.step(speed, simDT);
+        model.step(speed.data, simDT);
         
-        //RNN1L(model.vision, state, weights, speed, temp);
         controller.compute(vision, speed);
         
-        speed[0] = Math.min(maxSpeed, Math.max(minSpeed, speed[0]));
-        speed[1] = Math.min(maxSpeed, Math.max(minSpeed, speed[1]));
+        speed.data[0] = Math.min(maxSpeed, Math.max(minSpeed, speed.data[0]));
+        speed.data[1] = Math.min(maxSpeed, Math.max(minSpeed, speed.data[1]));
         
-        //distTraveled += L2distance(model.x, model.y, px, py);
-        //px = model.x;
-        //py = model.y;
+        distTraveled += L2distance(model.x, model.y, px, py);
+        px = model.x;
+        py = model.y;
         
         visitedSectors[Math.floor(model.x)+Math.floor(model.y)*10] = true;
         
@@ -123,7 +126,8 @@ robotWorldFitness = function(individual) {
     
     var travelArea = Object.keys(visitedSectors).length/100;
     //pr(travelArea);
-    var fitness = (-10*collisionSteps/simSteps)+(travelArea);
+    //var fitness = (-10*collisionSteps/simSteps) + distTraveled;// + (travelArea - 0.03);
+    var fitness = (-10*collisionSteps/simSteps) + travelArea + distTraveled/maxDistance;
     
     return {f: fitness, s: individual.s};
 }
