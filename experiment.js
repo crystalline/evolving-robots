@@ -1,5 +1,7 @@
 
 var fs = require('fs');
+var cluster = require('cluster');
+var parallel = require('./parallel.js');
 var util = require('./util.js');
 var Tensor = require('./tensor.js').Tensor;
 var ga = require('./ga.js');
@@ -174,7 +176,7 @@ function evolve(onDone) {
     
     var conf = {
         executeTasks: global.distExecuteTasks ? global.distExecuteTasks : false,
-        popSize: 100,
+        popSize: 200,
         winners: 5,
         losers: 10,
         generations: 5000,
@@ -230,29 +232,22 @@ function evolve(onDone) {
     }
 }
 
-evolve();
+var input = process.argv;
+isServer = true;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+if (input[2] === 'cluster') {
+    var nworkers = input[3] || 4;
+    if (cluster.isMaster) {
+        pr('MODE: LOCAL, NODE CLUSTER OF',nworkers);
+        isServer = true;
+        parallel.init(nworkers);
+        global.distExecuteTasks = parallel.pmap;
+        evolve();
+    } else {
+        isServer = false;
+    }
+} else {
+    evolve();
+}
 
 
