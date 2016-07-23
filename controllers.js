@@ -21,11 +21,16 @@ function RNN(Ninputs, Noutputs, Nstate,
     if (initWeights) initWeights(this);
 };
 
+function tanh(x) {
+    var e = Math.exp(-2.0*x);
+    return (1-e)/(1+e);
+}
+
 RNN.prototype.compute = function(input, output) {
     this.W_StSt.dot(this.state, this.temp);
     this.W_InSt.dot(input, this.state);
     this.state.add(this.temp);
-    this.state.map(Math.tanh);
+    this.state.map(tanh);
     this.W_StOut.dot(this.state, output);
 };
 
@@ -46,7 +51,7 @@ RNN.prototype.setParamsFromArray = function(arr, offset) {
 }
 
 RNN.prototype.reset = function() {
-    this.state.init( x => 0 );
+    this.state.init( function (x) { return 0 } );
 };
 
 RNN.prototype.print = function() {
@@ -73,7 +78,7 @@ Perceptron.prototype.compute = function(input, output) {
     this.temp.data[i] = 1;
     
     this.W.dot(this.temp, output);
-    output.map(Math.tanh);
+    output.map(tanh);
 };
 
 Perceptron.prototype.setParamsFromArray = function(arr, offset) {

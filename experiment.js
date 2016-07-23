@@ -71,7 +71,7 @@ function loadF64array(fpath, arr) {
 
 function testSaveLoadf64() {
     var arr = new Float64Array(10000);
-    initArray(arr, x => Math.random());
+    initArray(arr, function(x) { return Math.random() });
     saveF64array('temp.f64.bin', arr);
     var loaded = loadF64array('temp.f64.bin');
     if (!compareArrays(arr, loaded)) { pr('TEST FAILED') }
@@ -186,7 +186,7 @@ function evolve(onDone) {
         initGenome: function (i, initParams, random) {
             var genome = new Float64Array(genomeSize);
             //initArray(genome, x => { if (Math.random < 1/8) { return approxNormal(0, 0.1) } else return 0 });
-            initArray(genome, x => { return approxNormal(0, 0.5) });
+            initArray(genome, function(x) { return approxNormal(0, 0.5) });
             return genome;
         },
         opParams:   mutateFn,

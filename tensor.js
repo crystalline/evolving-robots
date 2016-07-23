@@ -52,6 +52,11 @@ function reduce(arr, fn) {
 //For vectors        shape = [vector_length]
 //For matrices       shape = [matrix_height, matrix_width]
 //For rank 3 tensors shape = [tensor3_depth, tensor3_height, tensor3_width]
+
+function isInteger(x) {
+    return x === Math.floor(x);
+}
+
 function Tensor(arg0, arg1, arg2) {
     
     var shape = arg0;
@@ -59,8 +64,8 @@ function Tensor(arg0, arg1, arg2) {
     var offset = arg2;
     offset = offset || 0;
     
-    if (arg0.length && every(arg0, Number.isInteger) && arg1 === undefined && arg2 === undefined) {
-        data = new Float32Array(reduce(arg0, (a,b) => a*b));
+    if (arg0.length && every(arg0, isInteger) && arg1 === undefined && arg2 === undefined) {
+        data = new Float32Array(reduce(arg0, function (a,b) { return a*b }));
         offset = 0;
     }
     
@@ -210,16 +215,16 @@ Tensor.prototype.add = function(value, dst) {
 */
 
 Tensor.prototype.add = function (tensorArg, tensorDstOpt) {
-    binaryTensorOp( (a,b) => a+b, this, tensorArg, tensorDstOpt);
+    binaryTensorOp( function (a,b) { return a+b }, this, tensorArg, tensorDstOpt);
 };
 Tensor.prototype.subtract = function (tensorArg, tensorDstOpt) {
-    binaryTensorOp( (a,b) => a-b, this, tensorArg, tensorDstOpt);
+    binaryTensorOp( function (a,b) { return a-b }, this, tensorArg, tensorDstOpt);
 };
 Tensor.prototype.multiply = function (tensorArg, tensorDstOpt) {
-    binaryTensorOp( (a,b) => a*b, this, tensorArg, tensorDstOpt);
+    binaryTensorOp( function (a,b) { return a*b }, this, tensorArg, tensorDstOpt);
 };
 Tensor.prototype.divide = function (tensorArg, tensorDstOpt) {
-    binaryTensorOp( (a,b) => a/b, this, tensorArg, tensorDstOpt);
+    binaryTensorOp( function (a,b) { return a/b }, this, tensorArg, tensorDstOpt);
 };
 
 function mulMatrixVector(matrix, inVector, outVector) {
@@ -300,7 +305,7 @@ function testTensor() {
     t9.print();    
     
     var t10 = new Tensor([3], [1,2,3]);
-    t10.map( x => x*x*x );
+    t10.map( function (x) { return x*x*x } );
     t10.print();
     _test(compareArrays(t10.data, [1,8,27]));
     
